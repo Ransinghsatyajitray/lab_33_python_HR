@@ -1,0 +1,267 @@
+---
+title: "Visualizing HR Employee Clusters"
+subtitle: "Using R + Python"
+author: "Business Science"
+date: "4/15/2020"
+output: 
+   html_document:
+       theme: flatly
+       toc: true
+       toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+    echo = TRUE,
+    message = FALSE,
+    warning = FALSE
+)
+```
+
+```{r}
+library(tidyverse)
+library(reticulate)
+
+# Replace this with your conda environment containking sklearn, pandas, & numpy
+use_condaenv("py3.8", required = TRUE)
+```
+
+
+
+
+# Data Ingest - R
+
+```{r}
+hr_data_tbl <- read_csv("data/HRDataset_v13.csv")
+
+hr_data_tbl
+```
+
+```{r}
+hr_data_tbl %>% glimpse()
+```
+
+
+# Subset & Fix Missingness -R
+
+```{r}
+library(DataExplorer)
+```
+
+
+```{r}
+hr_data_tbl %>% plot_missing()
+```
+
+```{r}
+hr_subset_tbl <- hr_data_tbl %>%
+    select(
+        # Employee
+        Employee_Name, GenderID, MaritalStatusID, 
+        # Pay
+        PayRate,
+        # Department
+         Department # ManagerName,
+        # # Performance
+        # PerformanceScore, SpecialProjectsCount,
+        # # Surveys
+        # EngagementSurvey, EmpSatisfaction
+    ) %>%
+    drop_na()
+
+hr_subset_tbl %>% glimpse()
+```
+
+```{r}
+hr_subset_tbl %>% plot_missing()
+```
+
+
+# Preprocessing - R
+
+```{r, paged.print = FALSE}
+library(recipes)
+
+rec_obj <- recipe(~ ., hr_subset_tbl) %>%
+    step_rm(Employee_Name) %>%
+    step_mutate_at(GenderID, MaritalStatusID, fn = as.factor) %>%
+    step_log(PayRate) %>%
+    step_dummy(all_nominal()) %>%
+    prep()
+    
+rec_obj
+```
+
+```{r}
+hr_subset_processed_tbl <- juice(rec_obj)
+
+hr_subset_processed_tbl %>% glimpse()
+```
+
+```{r}
+# Prep for Python
+X              <- as.matrix(hr_subset_processed_tbl)
+employee_names <- hr_subset_tbl$Employee_Name
+```
+
+
+# Clustering - Python
+
+```{python}
+# Data Manipulation
+import pandas as pd
+import numpy as np
+```
+
+
+```{python}
+r.X
+```
+
+```{python}
+pd.Series(r.employee_names)
+```
+
+## Affinity Propagation
+
+```{python}
+# Machine Learning
+from sklearn.cluster import AffinityPropagation
+```
+
+
+```{python}
+af = AffinityPropagation().fit(r.X)
+af
+```
+
+```{python}
+af.cluster_centers_indices_
+```
+
+
+```{python}
+cluster_assignments_af = af.labels_
+cluster_assignments_af
+```
+
+## DBSCAN
+
+```{python}
+from sklearn.cluster import DBSCAN
+```
+
+```{python}
+db = DBSCAN(min_samples=5).fit(r.X)
+db
+```
+
+
+
+```{python}
+cluster_assignments_db = db.labels_
+cluster_assignments_db
+```
+
+
+
+# Low-Dimensional Embedding - Python
+
+Needed to create a reduced representation of the original data in 2-D space.
+
+```{python}
+from sklearn.manifold import TSNE
+```
+
+```{python}
+X_embedded = TSNE(n_components=2, random_state=123).fit_transform(r.X)
+
+pd.DataFrame(X_embedded)
+```
+
+
+
+
+# Visualization - R
+
+## Getting Scikit-Learn Results
+
+```{r}
+# Affinity Propogation
+py$cluster_assignments_af
+```
+
+```{r}
+# DBSCAN
+py$cluster_assignments_db
+```
+
+```{r}
+X_embedded_tbl <- py$X_embedded %>% as_tibble()
+X_embedded_tbl
+```
+
+## Visualization
+
+```{r}
+library(plotly)
+library(tidyquant)
+```
+
+```{r}
+employee_clustering_tbl <- tibble(
+    Employee_Name = employee_names,
+    cluster_af    = py$cluster_assignments_af,
+    cluster_db    = py$cluster_assignments_db,
+) %>%
+    bind_cols(X_embedded_tbl) %>%
+    left_join(hr_data_tbl)
+
+employee_clustering_tbl
+```
+```{r}
+cluster_col_expr <- quo(cluster_db)
+
+g <- employee_clustering_tbl %>%
+    mutate(description = str_glue("{Employee_Name}
+                                  Position = {Position}
+                                  MaritalDesc = {MaritalDesc}
+                                  Sex = {Sex}
+                                  Race = {RaceDesc}
+                                  EmpStatusID = {EmpStatusID}
+                                  PayRate = {PayRate}
+                                  Terminated = {Termd}
+                                  Term Reason = {TermReason}
+                                  ")
+    ) %>%
+    select(Employee_Name:V2, description, Termd) %>%
+    
+    ggplot(aes(V1, V2, color = factor(!! cluster_col_expr))) +
+    geom_point(aes(text = description)) +
+    scale_color_tq() +
+    theme_tq() +
+    # theme(legend.position = "none") + 
+    labs(title = "Employee Cluster Assignements", color = "Cluster")
+    
+
+g
+```
+
+```{r}
+ggplotly(g)
+```
+
+# Termination by Cluster
+
+```{r}
+employee_clustering_tbl %>%
+    select(cluster_db, Termd) %>%
+    group_by(cluster_db) %>%
+    summarise(
+        term_rate = sum(Termd) / length(Termd),
+        count     = n()
+    ) %>%
+    arrange(desc(term_rate))
+```
+
+
