@@ -115,7 +115,7 @@ library(recipes)
 rec_obj <- recipe(~ ., hr_subset_tbl) %>%
     step_rm(Employee_Name) %>%
     step_normalize(all_numeric()) %>%
-    step_dummy(all_nominal()) %>%
+    step_dummy(all_nominal(), one_hot = FALSE) %>%
     prep()
     
 rec_obj
@@ -154,6 +154,12 @@ import numpy as np
 ```{python}
 r.X
 ```
+
+```{python}
+r.hr_subset_processed_tbl
+```
+
+
 
 ```{python}
 pd.Series(r.employee_names)
