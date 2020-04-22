@@ -133,9 +133,6 @@ hr_subset_processed_tbl %>%
     geom_histogram()
 ```
 
-
-
-
 ```{r}
 # Prep for Python
 X              <- as.matrix(hr_subset_processed_tbl)
@@ -235,6 +232,7 @@ py$cluster_assignments_db
 X_embedded_tbl <- py$X_embedded %>% as_tibble()
 X_embedded_tbl
 ```
+
 # Visualizations (R)
 
 ```{r}
@@ -258,7 +256,7 @@ employee_clustering_tbl
 
 
 ```{r}
-termination_rate_tbl <- employee_clustering_tbl %>%
+attrition_rate_tbl <- employee_clustering_tbl %>%
     select(cluster_db, Termd) %>%
     group_by(cluster_db) %>%
     summarise(
@@ -267,20 +265,20 @@ termination_rate_tbl <- employee_clustering_tbl %>%
     ) %>%
     arrange(desc(term_rate))
 
-termination_rate_tbl
+attrition_rate_tbl
 ```
 
 
-## Termination by Cluster Visualization
+## Attrition by Cluster Visualization
 
 ```{r}
-g <- termination_rate_tbl %>%
+g <- attrition_rate_tbl %>%
     mutate(cluster_db = as_factor(cluster_db) %>% fct_reorder(term_count)) %>%
     ggplot(aes(term_count, cluster_db)) +
     geom_col(aes(fill = term_rate)) +
     theme_tq() +
-    labs(title = "Termination Rate by Employee Cluster",
-         fill = "Term. Rate", x = "Termination Count", y = "Cluster Assignment")
+    labs(title = "Attrition Rate by Employee Cluster",
+         fill = "Attr. Rate", x = "Attrition Count", y = "Cluster Assignment")
 
 ggplotly(g)
 ```
@@ -289,7 +287,7 @@ ggplotly(g)
 
 ```{r}
 data_formatted <- employee_clustering_tbl %>%
-    left_join(termination_rate_tbl) %>%
+    left_join(attrition_rate_tbl) %>%
     mutate(description = str_glue("{Employee_Name}
                                   Position = {Position}
                                   MaritalDesc = {MaritalDesc}

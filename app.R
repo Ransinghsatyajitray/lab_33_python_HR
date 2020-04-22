@@ -1,5 +1,5 @@
 # LEARNING LAB 33: HR EMPLOYEE CLUSTERING WITH PYTHON
-# BONUS #1 - EMPLOYEE TERMINATION EXPLORER
+# BONUS #1 - EMPLOYEE ATTRITION EXPLORER
 
 # LIBRARIES ----
 library(shiny)
@@ -51,13 +51,13 @@ ui <- navbarPage(
     theme       = shinytheme("superhero"),
     
     shiny::tabPanel(
-        title = "Employee Termination Explorer",
+        title = "Employee Attrition Explorer",
         sidebarLayout(
             # 1.1 Sidebar ----
             sidebarPanel(
                 width = 3,
-                h3("Termination Factors"),
-                p("These are potential factors that are used to detect Employee Communities and their relationship to Termination."),
+                h3("Attrition Factors"),
+                p("These are potential factors that are used to detect Employee Communities and their relationship to Attrition."),
                 br(),
                 shiny::checkboxGroupInput(inputId = "selections", label = "Select one or more",
                                           choices     = selections_available, 
@@ -73,9 +73,9 @@ ui <- navbarPage(
                     class = "row",
                     div(
                         class = "col-sm-12 panel",
-                        div(class = "panel-heading", h5("Termination By Cluster")),
+                        div(class = "panel-heading", h5("Attrition By Cluster")),
                         div(class = "panel-body",
-                            plotlyOutput("plotly_termination", height = 250))
+                            plotlyOutput("plotly_attrition", height = 250))
                     )
                 ),
                 tabsetPanel(
@@ -165,7 +165,7 @@ server <- function(session, input, output) {
             bind_cols(as_tibble(rv$tsne_embedding)) %>%
             left_join(rv$data)
         
-        rv$termination_by_cluster_data <- rv$employee_cluster_data %>%
+        rv$attrition_by_cluster_data <- rv$employee_cluster_data %>%
             select(cluster_db, Termd) %>%
             group_by(cluster_db) %>%
             summarise(
@@ -181,21 +181,21 @@ server <- function(session, input, output) {
         req(rv$data, nrow(rv$data) > 1)
 
         list(
-            rv$termination_by_cluster_data
+            rv$attrition_by_cluster_data
         )
     })
     
-    # 2.2 Plotly Termination by Cluster-----
-    output$plotly_termination <- renderPlotly({
+    # 2.2 Plotly Attrition by Cluster-----
+    output$plotly_attrition <- renderPlotly({
         
-        req(rv$termination_by_cluster_data)
+        req(rv$attrition_by_cluster_data)
         
-        g <- rv$termination_by_cluster_data %>%
+        g <- rv$attrition_by_cluster_data %>%
             mutate(cluster_db = as_factor(cluster_db) %>% fct_reorder(term_count)) %>%
             ggplot(aes(cluster_db, term_count)) +
             geom_col(aes(fill = term_rate)) +
             theme_tq() +
-            labs(fill = "Term. Rate", x = "Termination Count", y = "Cluster Assignment") 
+            labs(fill = "Attr. Rate", x = "Attrition Count", y = "Cluster Assignment") 
         
         ggplotly(g)
         
@@ -207,7 +207,7 @@ server <- function(session, input, output) {
         req(rv$employee_cluster_data) 
         
         data_formatted <-  rv$employee_cluster_data %>%
-            left_join(rv$termination_by_cluster_data) %>%
+            left_join(rv$attrition_by_cluster_data) %>%
             mutate(description = str_glue("{Employee_Name}
                                   Position = {Position}
                                   MaritalDesc = {MaritalDesc}
