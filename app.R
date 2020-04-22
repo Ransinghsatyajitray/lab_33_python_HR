@@ -12,10 +12,10 @@ library(tidyquant)
 # Preprocessing
 library(recipes)
 
-
-
 # Python
 library(reticulate)
+
+# PYTHON SETUP ----
 
 # Replace this with your conda environment containking sklearn, pandas, & numpy
 use_condaenv("py3.8", required = TRUE)
@@ -23,6 +23,25 @@ use_condaenv("py3.8", required = TRUE)
 # Source Python Sklearn Functions
 source_python("py/clustering.py")
 source_python("py/tsne.py")
+
+# APP SETUP ----
+
+selections_default <- c(
+    "Sex", "MaritalDesc", "PayRate"
+)
+
+selections_available <- c(
+    "Sex", "MaritalDesc", 
+    "PayRate", "Department",
+    "RaceDesc",
+    "AgeRel", "TenureRel"
+)
+
+selection_names <- c(
+    "Sex", "Marital Status",
+    "Pay Rate", "Department",
+    "Race", "Age", "Tenure"
+)
 
 # ---- 1.0 UI ----
 ui <- navbarPage(
@@ -37,20 +56,13 @@ ui <- navbarPage(
             # 1.1 Sidebar ----
             sidebarPanel(
                 width = 3,
-                shiny::textInput(inputId = "query", label = "Topic / Hashtag", value = "#covid19"),
-                sliderInput(
-                    inputId = "n_tweets",
-                    label   = "Number of tweets:",
-                    min     = 1,
-                    max     = 1500,
-                    value   = 100),
-                shiny::textInput(inputId = "location", label = "Location", value = "Pittsburgh, PA"),
-                sliderInput(
-                    inputId = "n_miles",
-                    label   = "Twitter Search Radius (miles)",
-                    min     = 1,
-                    max     = 1500,
-                    value   = 1000),
+                h3("Termination Factors"),
+                p("These are potential factors that are used to detect Employee Communities and their relationship to Termination."),
+                br(),
+                shiny::checkboxGroupInput(inputId = "selections", label = "Select one or more",
+                                          choices     = selections_available, 
+                                          selected    = selections_default, 
+                                          choiceNames = selection_names),
                 shiny::actionButton(inputId = "submit", "Submit", class = "btn-primary")
             ),
             
@@ -112,18 +124,31 @@ server <- function(session, input, output) {
         rv$data <-  read_csv("data/HRDataset_v13.csv")
         
         rv$data_subset <- rv$data %>%
+            mutate(AgeRel    = ( mdy(DOB) - min(mdy(DOB), na.rm = TRUE) ) / dyears(1)) %>%
+            mutate(TenureRel = ( mdy(DateofHire) - min(mdy(DateofHire), na.rm = TRUE) ) / dyears(1)) %>%
             select(
-                Employee_Name, GenderID, MaritalStatusID, 
-                PayRate, Department 
+                one_of("Employee_Name", input$selections)
             ) %>%
             drop_na()
         
+        # Handle user selections based on data type
+        num_names <- rv$data_subset %>% select_if(is.numeric) %>% names()
+        chr_names <- rv$data_subset %>% select(-Employee_Name) %>% select_if(is.character) %>% names()
+        
         rec_obj <- recipe(~ ., rv$data_subset) %>%
-            step_rm(Employee_Name) %>%
-            step_mutate_at(GenderID, MaritalStatusID, fn = as.factor) %>%
-            step_log(PayRate) %>%
-            step_dummy(all_nominal()) %>%
-            prep()
+            step_rm(Employee_Name) 
+        
+        if (length(num_names) > 0) {
+            rec_obj <- rec_obj %>% step_normalize(all_numeric())
+        }
+        
+        if (length(chr_names) > 0) {
+            rec_obj <- rec_obj %>% step_dummy(all_nominal(), one_hot = TRUE)
+        }
+        
+        rec_obj <- rec_obj %>% prep()
+        
+        
         
         rv$data_subset_processed <- juice(rec_obj)
         

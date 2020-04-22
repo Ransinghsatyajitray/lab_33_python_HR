@@ -18,18 +18,37 @@ knitr::opts_chunk$set(
 )
 ```
 
+
+# Prerequisites (Conda py3.8 Environment)
+
+Follow the article, [_"How to Run Python's Scikit-Learn in R in 5 minutes"_](https://www.business-science.io/learn-r/2020/04/20/setup-python-in-r-with-rmarkdown.html)
+
+- Install the Anaconda Distribution
+
+- Get Python Scikit Learn Setup in R
+
+- Make "py3.8" conda environment with `scikit-learn`, `numpy`, `pandas` and `matplotlib`.
+
+# Setup R's Python interface
+
 ```{r}
-library(tidyverse)
 library(reticulate)
 
-# Replace this with your conda environment containking sklearn, pandas, & numpy
+# Replace this with your conda environment containing sklearn, pandas, & numpy
 use_condaenv("py3.8", required = TRUE)
 ```
 
 
-# R
 
-## Data Ingest - R
+# Data Wrangling & Preprocessing (R)
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+
+## Data Ingest
 
 ```{r}
 hr_data_tbl <- read_csv("data/HRDataset_v13.csv")
@@ -37,12 +56,27 @@ hr_data_tbl <- read_csv("data/HRDataset_v13.csv")
 hr_data_tbl
 ```
 
-```{r}
+```{r, eval=F}
 hr_data_tbl %>% glimpse()
 ```
 
+## Age and Tenure Features
 
-## Subset & Fix Missingness -R
+```{r}
+hr_data_tbl <- hr_data_tbl %>%
+    mutate(AgeRel    = ( mdy(DOB) - min(mdy(DOB), na.rm = TRUE) ) / dyears(1)) %>%
+    mutate(TenureRel = ( mdy(DateofHire) - min(mdy(DateofHire), na.rm = TRUE) ) / dyears(1))
+
+hr_data_tbl %>% select(AgeRel, TenureRel)
+
+hr_data_tbl %>%
+    ggplot(aes(AgeRel)) +
+    geom_histogram()
+```
+
+
+
+## Subset & Fix Missingness
 
 ```{r}
 library(DataExplorer)
@@ -54,19 +88,15 @@ hr_data_tbl %>% plot_missing()
 ```
 
 ```{r}
+selections <- c(
+    "Employee_Name", 
+    "Sex", "MaritalDesc", 
+    "PayRate", "Department",
+    "AgeRel"
+    )
+
 hr_subset_tbl <- hr_data_tbl %>%
-    select(
-        # Employee
-        Employee_Name, GenderID, MaritalStatusID, 
-        # Pay
-        PayRate,
-        # Department
-         Department # ManagerName,
-        # # Performance
-        # PerformanceScore, SpecialProjectsCount,
-        # # Surveys
-        # EngagementSurvey, EmpSatisfaction
-    ) %>%
+    select(one_of(selections)) %>%
     drop_na()
 
 hr_subset_tbl %>% glimpse()
@@ -77,15 +107,14 @@ hr_subset_tbl %>% plot_missing()
 ```
 
 
-## Preprocessing - R
+## Preprocessing (recipes)
 
 ```{r, paged.print = FALSE}
 library(recipes)
 
 rec_obj <- recipe(~ ., hr_subset_tbl) %>%
     step_rm(Employee_Name) %>%
-    step_mutate_at(GenderID, MaritalStatusID, fn = as.factor) %>%
-    step_log(PayRate) %>%
+    step_normalize(all_numeric()) %>%
     step_dummy(all_nominal()) %>%
     prep()
     
@@ -99,12 +128,21 @@ hr_subset_processed_tbl %>% glimpse()
 ```
 
 ```{r}
+hr_subset_processed_tbl %>%
+    ggplot(aes(AgeRel)) +
+    geom_histogram()
+```
+
+
+
+
+```{r}
 # Prep for Python
 X              <- as.matrix(hr_subset_processed_tbl)
 employee_names <- hr_subset_tbl$Employee_Name
 ```
 
-# Python
+# Machine Learning (Python)
 
 ## Clustering - Python
 
@@ -197,7 +235,7 @@ py$cluster_assignments_db
 X_embedded_tbl <- py$X_embedded %>% as_tibble()
 X_embedded_tbl
 ```
-# R Visualizations
+# Visualizations (R)
 
 ```{r}
 library(plotly)
@@ -285,7 +323,7 @@ ggplotly(g)
 
 
 
-# Shiny 
+# Shiny App
 
 ## Sourcing Python
 
@@ -296,12 +334,12 @@ source_python("py/tsne.py")
 ```
 
 ```{r}
-# Calls def cluster_dbscan(...) 
+# Calls def cluster_dbscan() 
 cluster_dbscan(X)
 ```
 
 ```{r}
-# calls def tsne_embedding
+# calls def tsne_embedding()
 tsne_embedding(X) %>% head()
 ```
 
@@ -309,6 +347,6 @@ tsne_embedding(X) %>% head()
 
 ```{r}
 # Bonus #2!!!
-
+knitr::include_graphics("img/shiny_app.jpg")
 ```
 
